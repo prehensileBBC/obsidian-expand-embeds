@@ -18,58 +18,69 @@ export default class ExpandEmbedPlugin extends Plugin {
 	frontmatterRegex = /^\s*?---\n([\s\S]*?)\n---/g;
 	transcludedRegex = /!\[\[(.+?)\]\]/g;
 
-	/*
-	constructor( app:App, manifest:PluginManifest, settings: ExpandEmbedPluginSettings) {
-        super( app, manifest );
-		this.vault = app.vault;
-        this.metadataCache = metadataCache;
-        this.settings = settings;
-    }*/
+	commandTitle = 'Expand embedded notes';
+
+
+	checkEditorAndSelection( editor: Editor ){
+		if(!editor) return false;
+		const s = editor.getSelection();
+		if( !s || s.length < 1 ) return false;
+		return true;
+	}
+
+	runExpandCommand( editor: Editor ) {
+
+		// Bail if there's no editor or selection
+		if( !this.checkEditorAndSelection(editor) ) return;
+
+		const linkName = Path.parse( this.app.workspace.getActiveFile().name ).name;
+		const linkPath = getLinkpath( linkName );
+
+		this.expandEmbedsInSelection(
+			editor.getSelection(),
+			linkPath,
+			0, 4 )
+			.then( (expandedText: string) => {
+				editor.replaceSelection( expandedText );
+			}
+		);
+	}
 
 	async onload() {
 		await this.loadSettings();
 
-		// This adds an editor command that can perform some operation on the current editor instance
 		this.addCommand({
 			id: 'expand-embeds-selection',
-			name: 'Expand embedded notes in current selection',
+			name: `${this.commandTitle} in current selection`,
 			editorCallback: (editor: Editor, view: MarkdownView) => {
-				console.log(editor.getSelection());
-
-				const linkName = Path.parse( this.app.workspace.getActiveFile().name ).name;
-				const linkPath = getLinkpath( linkName );
-
-				this.expandEmbedsInSelection(
-					editor.getSelection(),
-					linkPath,
-					0, 4 )
-					.then( (expandedText: string) => {
-						editor.replaceSelection( expandedText );
-					}
-				);
-	
+				this.runExpandCommand( editor );
 			}
 		});
-		// This adds a complex command that can check whether the current state of the app allows execution of the command
+
 		this.addCommand({
-			id: 'open-sample-modal-complex',
-			name: 'Open sample modal (complex)',
-			checkCallback: (checking: boolean) => {
-				// Conditions to check
-				const markdownView = this.app.workspace.getActiveViewOfType(MarkdownView);
-				if (markdownView) {
-					// If checking is true, we're simply "checking" if the command can be run.
-					// If checking is false, then we want to actually perform the operation.
-					if (!checking) {
-						//new SampleModal(this.app).open();
-						console.log( "Do the operation!" );
-					}
-
-					// This command will only show up in Command Palette when the check function returns true
-					return true;
-				}
+			id: 'expand-embeds-document',
+			name: `${this.commandTitle} in entire document`,
+			editorCallback: (editor: Editor, view: MarkdownView) => {
+				// TODO
+				return;
 			}
 		});
+
+		// listen for right-click menu events in an editor window
+		this.registerEvent(
+			this.app.workspace.on("editor-menu", (menu, editor, view) => {
+				
+				// Bail if there's no editor or selection
+				if( !this.checkEditorAndSelection(editor) ) return;
+				
+				menu.addItem((item) => {
+					item
+					.setTitle( this.commandTitle )
+					.setIcon( "expand" )
+					.onClick( () => this.runExpandCommand(editor) );
+				});
+			})
+		  );
 
 	}
 
@@ -115,8 +126,9 @@ export default class ExpandEmbedPlugin extends Plugin {
 							// Transclude Block
 							const metadata = this.app.metadataCache.getFileCache(linkedFile);
 							const refBlock = tranclusionFileName.split('#^')[1];
-							sectionID = `#${slugify(refBlock)}`;
-							const blockInFile = metadata.blocks[refBlock];
+							sectionID = `${slugify(refBlock)}`;
+							const blockInFile = metadata.blocks[sectionID];
+							debugger;
 							if (blockInFile) {
 	
 								fileText = fileText
